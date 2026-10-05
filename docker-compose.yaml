@@ -1,0 +1,98 @@
+services:
+  database:
+    image: postgres:17-alpine
+    container_name: store_db
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - store_db:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $POSTGRES_DB -U $POSTGRES_USER"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+  
+  # redis:
+  #   container_name: redis
+  #   image: docker.io/valkey/valkey:9.1-alpine
+  #   command: valkey-server --save 30 1 --loglevel warning
+  #   restart: unless-stopped
+  #   volumes:
+  #     - store_valkey_data:/data
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: "1m"
+  #       max-file: "1"
+
+  #   ports:
+  #     - "${REDIS_PORT}:6379"
+
+  #   env_file:
+  #     - .env
+
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 5
+  
+  # xray-config-sharer:
+  #   container_name: XrayConfigSharer
+  #   restart: unless-stopped
+  #   build:
+  #     context: xray-config-sharer/
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "8001:8001"
+  #   volumes:
+  #     - ./xray/config/config.json:/config/config.json
+
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8001/health/"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+  # pgbouncer:
+  #   image: edoburu/pgbouncer:latest
+  #   container_name: pgbouncer
+  #   restart: unless-stopped
+
+  #   ports:
+  #     - "6432:5432"
+
+  #   env_file:
+  #     - .env
+
+  #   environment:
+  #     DB_HOST: database
+  #     DB_PORT: ${POSTGRES_PORT}
+  #     DB_USER: ${POSTGRES_USER}
+  #     DB_PASSWORD: ${POSTGRES_PASSWORD}
+  #     DB_NAME: ${POSTGRES_DB}
+
+  #     POOL_MODE: transaction
+
+  #     MAX_CLIENT_CONN: 1000
+
+  #     DEFAULT_POOL_SIZE: 25
+  #     RESERVE_POOL_SIZE: 5
+
+  #     SERVER_IDLE_TIMEOUT: 80
+
+  #     AUTH_TYPE: scram-sha-256
+
+  #     IGNORE_STARTUP_PARAMETERS: extra_float_digits
+
+  #   depends_on:
+  #     database:
+  #       condition: service_healthy
+
+
+volumes:
+  store_db:
+  # store_valkey_data:
