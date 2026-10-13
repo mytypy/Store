@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from fastapi import HTTPException, status
@@ -23,7 +23,7 @@ class JwtService:
         Returns:
             tuple[str, str]: jti и JWT токен
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expire = now + timedelta(minutes=expire_minutes)
         jti = str(uuid.uuid4())
         
@@ -49,7 +49,7 @@ class JwtService:
         Returns:
             tuple[str, str]: jti и JWT токен
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expire = now + timedelta(minutes=expire_minutes)
 
         jti = str(uuid.uuid4())

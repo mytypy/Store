@@ -16,7 +16,6 @@ class User(Model):
     email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     adress: Mapped[str] = mapped_column(String(255), nullable=True)
     
-    login: Mapped[str] = mapped_column(String(64), nullable=False)
     password: Mapped[str] = mapped_column(String(255), nullable=False)
     
     balance: Mapped[Decimal] = mapped_column(Numeric(precision=9, scale=2), server_default=text('0.00'), nullable=False)

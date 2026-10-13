@@ -180,3 +180,4 @@ settings.yaml
 !.env.example
 profile/
 node_modules
+GEMINI.md

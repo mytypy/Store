@@ -15,30 +15,30 @@ services:
       timeout: 10s
       retries: 5
   
-  # redis:
-  #   container_name: redis
-  #   image: docker.io/valkey/valkey:9.1-alpine
-  #   command: valkey-server --save 30 1 --loglevel warning
-  #   restart: unless-stopped
-  #   volumes:
-  #     - store_valkey_data:/data
-  #   logging:
-  #     driver: "json-file"
-  #     options:
-  #       max-size: "1m"
-  #       max-file: "1"
+  redis:
+    container_name: redis
+    image: docker.io/valkey/valkey:9.1-alpine
+    command: valkey-server --save 30 1 --loglevel warning
+    restart: unless-stopped
+    volumes:
+      - store_valkey_data:/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "1"
 
-  #   ports:
-  #     - "${REDIS_PORT}:6379"
+    ports:
+      - "${REDIS_PORT}:6379"
 
-  #   env_file:
-  #     - .env
+    env_file:
+      - .env
 
-  #   healthcheck:
-  #     test: ["CMD", "redis-cli", "ping"]
-  #     interval: 5s
-  #     timeout: 5s
-  #     retries: 5
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
   
   # xray-config-sharer:
   #   container_name: XrayConfigSharer
@@ -95,4 +95,4 @@ services:
 
 volumes:
   store_db:
-  # store_valkey_data:
+  store_valkey_data:

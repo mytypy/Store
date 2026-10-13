@@ -1,23 +1,28 @@
 import jwt
-from db.config import get_db_session
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from services.exceptions.exceptions import AuthException
-from services.utils.auth.auth_utils import (
+from sqlalchemy.ext.asyncio.session import AsyncSession
+
+from app.core.security.jwt_service import JwtService
+from app.crud.user.user import get_user
+from app.db.config import get_db_session
+from app.models.user import User
+from app.schemas.response.auth import JWTokenModel
+from app.services.exceptions.exceptions import AuthException
+from app.services.utils.auth.auth_utils import (
     check_jti,
     check_user_relevance,
     set_user_relevance,
 )
-from sqlalchemy.ext.asyncio.session import AsyncSession
 
-from app.core.security.jwt_service import UserAuth
-from app.schemas.response.auth import JWTokenModel
-
-security = HTTPBearer()
+security = Depends(HTTPBearer())
+jwt_service = Depends(JwtService)
+db_session = Depends(get_db_session)
 
 
-async def is_auth(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security),  # noqa: B008
-                  auth: UserAuth = Depends(UserAuth), session: AsyncSession = Depends(get_db_session)) -> JWTokenModel:  # noqa: B008
+async def is_auth(request: Request, credentials: HTTPAuthorizationCredentials = security,
+                  jwt_service: JwtService = jwt_service,
+                  session: AsyncSession = db_session) -> JWTokenModel:
     """Функция для проверки актуальности пользователя и access токена
 
     Args:
@@ -43,14 +48,14 @@ async def is_auth(request: Request, credentials: HTTPAuthorizationCredentials = 
             clear_cookies=False
         )
 
-    validate = await auth.decode_token(access_token, secret=auth.jwt_secret.ACCESS_TOKEN_SECRET)
+    validate = await jwt_service.decode_token(access_token, secret=jwt_service.jwt_secret.ACCESS_TOKEN_SECRET)
     
     user_id = int(validate.sub)
     
     redis_result: bool = await check_user_relevance(user_id=user_id)
     
     if redis_result is False:
-        user_object = await get_user_units(User.user_id == user_id, session=session)
+        user_object = await get_user(User.user_id == user_id, session=session, fields_to_get=(User.user_id, ))
         user: User | None = user_object.scalars().one_or_none()
         
         if user is None:
@@ -60,7 +65,7 @@ async def is_auth(request: Request, credentials: HTTPAuthorizationCredentials = 
                 clear_cookies=True
         ) 
         else:
-            await set_user_relevance(user_id=user_id, expire=auth.jwt_secret.ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+            await set_user_relevance(user_id=user_id, expire=jwt_service.jwt_secret.ACCESS_TOKEN_EXPIRE_MINUTES * 60)
     
     await check_jti(user_id=user_id, jti=validate.jti, type_jti=validate.type)
     
@@ -69,7 +74,7 @@ async def is_auth(request: Request, credentials: HTTPAuthorizationCredentials = 
     return validate
 
 
-async def is_refresh_token(request: Request, auth: UserAuth = Depends(UserAuth)) -> JWTokenModel:  # noqa: B008
+async def is_refresh_token(request: Request, jwt_service: JwtService = jwt_service) -> JWTokenModel:
     """Функция для проверки refresh токена
 
     Args:
@@ -89,8 +94,8 @@ async def is_refresh_token(request: Request, auth: UserAuth = Depends(UserAuth))
     if not refresh_token:
         raise HTTPException(detail='Вы не передали RefreshToken!', status_code=status.HTTP_403_FORBIDDEN)
     
-    jwt.decode(jwt=refresh_token, key=auth.jwt_secret.REFRESH_TOKEN_SECRET, algorithms=auth.jwt_secret.ALGORITHM)
-    validate = await auth.decode_token(refresh_token, secret=auth.jwt_secret.REFRESH_TOKEN_SECRET)
+    jwt.decode(jwt=refresh_token, key=jwt_service.jwt_secret.REFRESH_TOKEN_SECRET, algorithms=jwt_service.jwt_secret.ALGORITHM)
+    validate = await jwt_service.decode_token(refresh_token, secret=jwt_service.jwt_secret.REFRESH_TOKEN_SECRET)
     
     user_id = int(validate.sub)
     jti = validate.jti

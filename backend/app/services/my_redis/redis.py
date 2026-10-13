@@ -44,6 +44,9 @@ class Redis(aioredis.Redis):
         """Функция для закрытия соединения Redis"""
         
         await self.redis.aclose()
+    
+    def __getattr__(self, name):
+        return getattr(self.redis, name)
 
 
 redis = Redis()

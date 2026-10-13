@@ -3,9 +3,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import JSONResponse
-from services.exceptions.exceptions import AuthException
 
+from app.api.routes.auth import router as auth_router
 from app.db.config import cfg, engine
+from app.services.exceptions.exceptions import AuthException
+from app.services.my_redis.redis import redis
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,6 +21,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):    
     try:
         await cfg.wait_db(engine=engine, retries=10)
+        await redis.init(retries_for_ping=10)
         
         yield
     finally:
@@ -59,4 +62,5 @@ async def auth_exception_handler(_: Request, exc: AuthException):
 api = APIRouter(prefix='/api')
 
 
+api.include_router(auth_router)
 app.include_router(api)

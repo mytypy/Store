@@ -1,100 +1,17 @@
 from typing import Literal
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, status
 from fastapi.responses import JSONResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy.ext.asyncio.session import AsyncSession
+from fastapi.security import HTTPBearer
 
 from app.core.security.jwt_service import JwtService
 from app.db.config import get_db_session
-from app.schemas.response.auth import JWTokenModel
-from app.services.exceptions.exceptions import AuthException
 from app.services.my_redis.redis import redis
 
 security = HTTPBearer()
-
-
-async def is_auth(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security),
-                  jwt_service: JwtService = Depends(JwtService), session: AsyncSession = Depends(get_db_session)) -> JWTokenModel:
-    """Функция для проверки актуальности пользователя и access токена
-
-    Args:
-        request (Request): Объект запроса
-        credentials (HTTPAuthorizationCredentials, optional): Credentials
-        auth (UserAuth, optional): Экземпляр класса для проверки токенов
-        session (AsyncSession, optional): Асинхронная сессия
-
-    Raises:
-        AuthException: Исключение, если не был передан Access токен
-        AuthException: Исключение с очисткой cookies, если такого пользователя нет в БД
-
-    Returns:
-        JWTokenModel: Объект JWT(Access) токена
-    """
-    
-    access_token = credentials.credentials    
-
-    if access_token is None:
-        raise AuthException(
-            detail='Вы не передали access token',
-            status_code=status.HTTP_403_FORBIDDEN,
-            clear_cookies=False
-        )
-
-    validate = await jwt_service.decode_token(access_token, secret=jwt_service.jwt_secret.ACCESS_TOKEN_SECRET)
-    
-    user_id = int(validate.sub)
-    
-    redis_result: bool = await check_user_relevance(user_id=user_id)
-    
-    if redis_result is False:
-        user_object = await get_user_units(User.user_id == user_id, session=session)
-        user: User | None = user_object.scalars().one_or_none()
-        
-        if user is None:
-            raise AuthException(
-                detail='Вы не передали access token',
-                status_code=status.HTTP_403_FORBIDDEN,
-                clear_cookies=True
-        ) 
-        else:
-            await set_user_relevance(user_id=user_id, expire=jwt_service.jwt_secret.ACCESS_TOKEN_EXPIRE_MINUTES * 60)
-    
-    await check_jti(user_id=user_id, jti=validate.jti, type_jti=validate.type)
-    
-    request.state.user_id = validate.sub
-    
-    return validate
-
-
-async def is_refresh_token(request: Request, jwt_service: JwtService = Depends(JwtService)) -> JWTokenModel:
-    """Функция для проверки refresh токена
-
-    Args:
-        request (Request): Объект запроса
-        auth (UserAuth, optional): Экземпляр класса для проверки токенов
-
-    Raises:
-        HTTPException: Ошибка, если refresh токен не был передан
-
-    Returns:
-        JWTokenModel: Объект JWT токена
-    """
-    
-    cookies = request.cookies
-    refresh_token = cookies.get('refresh_token')
-    
-    if not refresh_token:
-        raise HTTPException(detail='Вы не передали RefreshToken!', status_code=status.HTTP_403_FORBIDDEN)
-    
-    validate = await jwt_service.decode_token(refresh_token, secret=jwt_service.jwt_secret.REFRESH_TOKEN_SECRET)
-    
-    user_id = int(validate.sub)
-    jti = validate.jti
-    
-    await check_jti(user_id=user_id, jti=jti, type_jti=validate.type)
-    
-    return validate
+security = Depends(security)
+jwt_service = Depends(JwtService)
+db_session = Depends(get_db_session)
 
 
 async def get_tokens(user_id: int, jwt_service: JwtService) -> JSONResponse:
@@ -141,51 +58,76 @@ async def get_tokens(user_id: int, jwt_service: JwtService) -> JSONResponse:
 
 
 async def check_jti(user_id: int, jti: str, type_jti: Literal['access', 'refresh']) -> None:
-    """Функция для проверки jti токена
+    """
+    Проверяет, является ли JWT-токен актуальным.
+
+    Для каждого пользователя и типа токена в Redis хранится
+    один разрешённый jti. Если запись отсутствует или значение
+    не совпадает с jti из токена, доступ запрещается.
 
     Args:
-        user_id (int): user_id пользователя из БД
-        jti (str): Уникальный идентификатор jwt токена
-        type_jti (Literal[access, refresh]): Типы jwt токенов
+        user_id: Идентификатор пользователя из проверенного JWT
+        jti: Уникальный идентификатор предъявленного токена
+        type_jti: Тип токена — access или refresh
+        redis: Асинхронный клиент Redis
 
     Raises:
-        HTTPException: Ошибка, если jti не актуален
+        HTTPException: Если токен отозван, устарел или отсутствует
+            в списке актуальных токенов.
     """
       
     key = f'{user_id}_{type_jti}_jti'
     
     redis_jti = await redis.get(key)
     
-    if redis_jti != jti and redis_jti is not None:
+    if redis_jti != jti or redis_jti is None:
         raise HTTPException(detail=f'Это не актуальный {type_jti.title()} Token', status_code=status.HTTP_403_FORBIDDEN)
 
 
 async def set_jti(user_id: int, jti: str, time_expire: int, type_jti: Literal['access', 'refresh']) -> None:
-    """Функция для вставки jti в Redis
+    """
+    Сохраняет актуальный jti для пользователя в Redis.
+
+    Предыдущий jti для этого типа токена заменяется новым.
+    Ключ автоматически удаляется по истечении time_expire.
 
     Args:
-        user_id (int): user_id пользователя из БД
-        jti (str): Уникальный идентификатор jwt токена
-        time_expire (int): Срок истечения jti
-        type_jti (Literal[access, refresh]): Типы JWT токенов
+        user_id: Идентификатор пользователя
+        jti: Идентификатор нового JWT
+        time_expire: Время жизни записи в секундах
+        type_jti: Тип токена — access или refresh
+        redis: Асинхронный клиент Redis
+
+    Raises:
+        ValueError: Если срок хранения не положительный
     """
     
-    key = f'{user_id}_{type_jti}_jti'
-    
-    await redis.delete(key)
-    await redis.set(key, jti)
-    await redis.expire(name=key, time=time_expire)
+    if time_expire <= 0:
+        raise ValueError("time_expire должен быть больше нуля!")
+
+    key = f"{user_id}_{type_jti}_jti"
+
+    await redis.set(key, jti, ex=time_expire)
 
 
 async def check_user_relevance(user_id: int) -> bool:
-    """Функция для проверки существования актуальности ключа пользователя в Redis
+    """
+    Проверяет наличие записи об актуальности пользователя в Redis.
+
+    Отсутствие ключа означает, что пользователь не считается
+    активным в рамках этой системы проверки.
+
+    При необходимости это проверяется
+    отдельным запросом к БД.
 
     Args:
-        user_id (int): user_id из JWT токена пользователя
+        user_id: Идентификатор пользователя
+        redis: Асинхронный клиент Redis
 
     Returns:
-        bool: Есть ли запись в redis
+        True, если ключ существует; иначе False
     """
+    
     key = f'user_relevance_{user_id}'
     
     response = await redis.get(key)
@@ -194,13 +136,23 @@ async def check_user_relevance(user_id: int) -> bool:
 
 
 async def set_user_relevance(user_id: int, expire: int) -> None:
-    """Функция для вставки значения для актуальности пользователя в redis
+    """
+    Создаёт запись об актуальности пользователя в Redis.
+
+    Запись автоматически удаляется через expire секунд.
 
     Args:
-        user_id (int): user_id из jwt токена
-        expire (int): Кол-во секунд до удаления ключа из redis
+        user_id: Идентификатор пользователя
+        expire: Время жизни записи в секундах
+        redis: Асинхронный клиент Redis
+
+    Raises:
+        ValueError: Если срок хранения не положительный
     """
     
-    key = f'user_relevance_{user_id}'
-    
-    await redis.set(key, value=1, ex=expire)
+    if expire <= 0:
+        raise ValueError("expire должен быть больше нуля!")
+
+    key = f"user_relevance_{user_id}"
+
+    await redis.set(key, 1, ex=expire)

@@ -48,3 +48,13 @@ class RedisSettings(BaseSettings):
         env_file=ENV_FILE_PATH,
         extra='ignore'
         )
+
+
+# class AppSettings(BaseSettings):
+#     """Класс для получения настроек приложения"""
+    
+#     model_config = SettingsConfigDict(
+#         env_prefix='APP_',
+#         env_file=ENV_FILE_PATH,
+#         extra='ignore'
+#     )

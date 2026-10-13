@@ -2,6 +2,10 @@ from fastapi import status
 
 
 class AuthException(Exception):
+    """
+    Пользовательский класс ошибки для сброса cookie
+    """
+    
     def __init__(
         self,
         detail: str = "Unauthorized",
