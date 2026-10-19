@@ -16,6 +16,7 @@ from sqlalchemy.exc import (
     StatementError,
     TimeoutError,
 )
+from app.services.exceptions.exceptions import UniqueUser
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -111,6 +112,11 @@ def db_errors_to_http(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Ошибка PostgreSQL: "
             )
 
+        except UniqueUser as e:
+            logger.error(e.detail)
+            
+            raise HTTPException(detail=e.detail, status_code=e.status_code)
+            
         except Exception as e:  # noqa: BLE001
             logger.error(f'Ошибка бд: {e}')
             

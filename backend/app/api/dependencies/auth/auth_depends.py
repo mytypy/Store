@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 
 from app.core.security.jwt_service import JwtService
 from app.crud.user.user import get_user
-from app.db.config import get_db_session
+from app.db.manager import get_db_session
 from app.models.user import User
 from app.schemas.response.auth import JWTokenModel
 from app.services.exceptions.exceptions import AuthException

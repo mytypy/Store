@@ -15,3 +15,13 @@ class AuthException(Exception):
         self.detail = detail
         self.status_code = status_code
         self.clear_cookies = clear_cookies
+
+
+class UniqueUser(Exception):
+    """
+    Пользовательский класс ошибки для сообщения об уникальности пользователя
+    """
+    
+    def __init__(self, detail: str, status_code: int = status.HTTP_409_CONFLICT):
+        self.detail = detail
+        self.status_code = status_code

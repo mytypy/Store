@@ -2,6 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_FILE_PATH = '../.env'
 
+
 class DatabaseSettings(BaseSettings):
     """Класс для получения данных для БД"""
     

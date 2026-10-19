@@ -8,7 +8,7 @@ from app.api.dependencies.auth.auth_depends import is_auth, is_refresh_token
 from app.core.security.auth import get_password_hash, verify_password
 from app.core.security.jwt_service import JwtService
 from app.crud.user.user import create_user, get_user
-from app.db.config import get_db_session
+from app.db.manager import get_db_session
 from app.models.user import User
 from app.schemas.annotations.annotations import LoginUserData
 from app.schemas.request.auth import LoginData, RegistrationData
@@ -18,9 +18,14 @@ from app.services.utils.auth.auth_utils import get_tokens
 router = APIRouter(prefix='/auth', tags=['Работа с авторизацией'])
 logger = logging.getLogger(name=__name__)
 
+db_session = Depends(get_db_session)
+auth = Depends(is_auth)
+jwt_service = Depends(JwtService)
+refresh_validate = Depends(is_refresh_token)
+
 
 @router.post('/handshake/')
-async def handshake(_: JWTokenModel = Depends(is_auth)) -> JSONResponse:  # noqa: B008
+async def handshake(_: JWTokenModel = auth) -> JSONResponse:
     """Endpoint для проверки действительности access-токена
 
     Args:
@@ -34,7 +39,7 @@ async def handshake(_: JWTokenModel = Depends(is_auth)) -> JSONResponse:  # noqa
 
 
 @router.post('/login/')
-async def login_user(data: LoginData, session: AsyncSession = Depends(get_db_session), jwt_service: JwtService = Depends(JwtService)) -> JSONResponse:  # noqa: B008
+async def login_user(data: LoginData, session: AsyncSession = db_session, jwt_service: JwtService = jwt_service) -> JSONResponse:
     """Endpoint, который выполняет вход пользователя и вовзращает HttpOnly JWT токены
 
     Args:
@@ -63,7 +68,7 @@ async def login_user(data: LoginData, session: AsyncSession = Depends(get_db_ses
 
 
 @router.post('/registration/')
-async def user_registration(data: RegistrationData, session: AsyncSession = Depends(get_db_session), jwt_service: JwtService = Depends(JwtService)) -> JSONResponse:  # noqa: B008
+async def user_registration(data: RegistrationData, session: AsyncSession = db_session, jwt_service: JwtService = jwt_service) -> JSONResponse:
     """Endpoint, который регистрирует пользователя и вовзращает HttpOnly JWT токены
 
     Args:
@@ -88,7 +93,7 @@ async def user_registration(data: RegistrationData, session: AsyncSession = Depe
 
 
 @router.post('/refresh/')
-async def refresh_tokens(refresh: JWTokenModel = Depends(is_refresh_token), jwt_service: JwtService = Depends(JwtService)) -> JSONResponse:  # noqa: B008
+async def refresh_tokens(refresh: JWTokenModel = refresh_validate, jwt_service: JwtService = jwt_service) -> JSONResponse:
     """Endpoint, который сбрасывает токены пользователя
 
     Args:
@@ -99,7 +104,7 @@ async def refresh_tokens(refresh: JWTokenModel = Depends(is_refresh_token), jwt_
         JSONResponse: Новый Access + Refresh токен
     """
     
-    user_id = int(refresh.get('sub'))
+    user_id = int(refresh.sub)
     
     response = await get_tokens(user_id=user_id, jwt_service=jwt_service)
     

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.utils import db_errors_to_http
 from app.models.user import User
+from app.services.exceptions.exceptions import UniqueUser
 
 
 @db_errors_to_http
@@ -32,7 +33,7 @@ async def create_user(name: str, surname: str, email: str, hashed_password: str,
     user_id = result.scalar()
     
     if user_id is None:
-        raise HTTPException(detail='Пользователь с этим email уже существует', status_code=status.HTTP_400_BAD_REQUEST)
+        raise UniqueUser(detail='Пользователь с этим email уже существует', status_code=status.HTTP_409_CONFLICT)
     
     return user_id
     

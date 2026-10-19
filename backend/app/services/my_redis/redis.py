@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 import redis.asyncio as aioredis
 
@@ -14,6 +15,14 @@ class Redis(aioredis.Redis):
         self.logger = logging.getLogger(__name__)
 
     async def ping(self, retries_for_ping: int = 10) -> None:
+        """Функция для проверки состояния redis сервера
+
+        Args:
+            retries_for_ping (int, optional): Кол-во попыток для пинга. ПО умолчанию 10.
+
+        Raises:
+            RuntimeError: _description_
+        """
         for i in range(1, retries_for_ping + 1):
             self.logger.info(f"Пробуем подклчюиться к Redis. Попытка №{i}")
             
@@ -45,7 +54,18 @@ class Redis(aioredis.Redis):
         
         await self.redis.aclose()
     
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
+        """
+        Магический метод для получения метода, которого нет в классе
+        (делается для того, чтобы можно было использовать в сочетании с наследованием)
+
+        Args:
+            name (str): Имя аттрибута
+
+        Returns:
+            Any: Объект класса aioredis.Redis
+        """
+        
         return getattr(self.redis, name)
 
 

@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer
 
 from app.core.security.jwt_service import JwtService
-from app.db.config import get_db_session
+from app.db.manager import get_db_session
 from app.services.my_redis.redis import redis
 
 security = HTTPBearer()

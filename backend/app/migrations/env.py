@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.db.base import Model
-from app.db.config import Config
+from app.db.manager import Config
 from app.models.cart import Cart
 from app.models.category import Category
 from app.models.order import Order
